@@ -56,62 +56,49 @@ public class HuffProcessor {
 	}
 	
 	private void writeCompressedBits(String[] codings, BitInputStream in, BitOutputStream out) {
-		while (true) {
-			int bits = in.readBits(BITS_PER_WORD);
+		int bits = 1;
+		while (bits >= 0) {
+			bits = in.readBits(BITS_PER_WORD);
 			//if (bits == PSEUDO_EOF) break;
 			if (bits == -1) {
-				String encode = codings[256];
-	            out.writeBits(encode.length(), Integer.parseInt(encode, 2));
-//	            System.out.println(codings[256]);
-				break;
+				writeStringToBits(codings, out, ALPH_SIZE);
+				return;
 			}
-			String code = codings[bits];
-			out.writeBits(code.length(), Integer.parseInt(code,2));
+			writeStringToBits(codings, out, bits);
 		}
 		
-		String code = codings[PSEUDO_EOF];
-		out.writeBits(code.length(), Integer.parseInt(code,2));
-		//out.close();
+		//String code = codings[PSEUDO_EOF];
+		//out.writeBits(code.length(), Integer.parseInt(code,2));
+	}
+
+	private void writeStringToBits(String[] codings, BitOutputStream out, int bits) {
+		String code = codings[bits];
+		for (int i = 0; i<code.length(); i++) {
+			String s = code.substring(i, i+1);
+			int k = Integer.parseInt(s);
+			out.writeBits(1, k);
+		}
+		return;
 	}
 
 	private void writeHeader(HuffNode root, BitOutputStream out) {
-		/*if (root == null) {
+		if (root == null) {
 			return;
 		}
-		if (root.myLeft==null && root.myRight== null) {
-			out.writeBits(BITS_PER_INT, 1);
+		
+		if (root.myValue != -1) {
+			out.writeBits(1, 1);
 			out.writeBits(BITS_PER_WORD + 1, root.myValue);
 			return;
 		}
-		out.writeBits(BITS_PER_INT, 0);
-		writeHeader(root.myLeft, out);
-		writeHeader(root.myRight, out);*/
-		
-		if(root == null)
-	        throw new HuffException("tree is empty");
-	    out.writeBits(BITS_PER_INT, HUFF_TREE);
-	    writeHeaderHelper(root, out);
 
+
+		out.writeBits(1,0);
+		writeHeader(root.myLeft, out);
+		writeHeader(root.myRight, out);
+		return;
 	}
 	
-	private void writeHeaderHelper(HuffNode node, BitOutputStream out) {
-	    if(node == null)
-	        return;
-	    else if(node.myValue != -1) {
-	        out.writeBits(1, 1);
-//	        System.out.print(1);
-	        out.writeBits(BITS_PER_WORD+1, node.myValue);
-//	        System.out.print((char)node.value());
-	    }
-	    else {
-	        out.writeBits(1,0);
-//	        System.out.print(0);
-	        writeHeaderHelper(node.myLeft, out);
-	        writeHeaderHelper(node.myRight, out);
-	    }
-	}
-
-
 	private String[] makeCodingsFromTree(HuffNode root) {
 		String[] encodings = new String[ALPH_SIZE + 1];
 	    codingHelper(root,"",encodings);
@@ -119,7 +106,7 @@ public class HuffProcessor {
 	}
 
 	private void codingHelper(HuffNode root, String string, String[] encodings) {
-		if (root.myLeft == null && root.myRight==null) {
+		if (root.myValue != -1) {
 			encodings[root.myValue] = string;
 			if (myDebugLevel >= DEBUG_HIGH) {
 				System.out.printf("Encoding for %d is %s\n", root.myValue, string);
@@ -136,19 +123,13 @@ public class HuffProcessor {
 
 		for(int index = 0; index< counts.length; index++) {
 			if (counts[index]>0) {
-				int c = counts[index];
-		        if(c == 0)
-		            continue;
 				pq.add(new HuffNode(index,counts[index],null,null));
 			}
 		}
-		if(pq.isEmpty()) {
-	        throw new IllegalArgumentException("input array is empty");
-	    }
+		pq.add(new HuffNode(PSEUDO_EOF, 1));
 		if (myDebugLevel >= DEBUG_HIGH) {
 			System.out.printf("pq created with %d nodes\n", pq.size());
 		}
-		
 		while (pq.size() > 1) {
 		    HuffNode left = pq.remove();
 		    HuffNode right = pq.remove();
